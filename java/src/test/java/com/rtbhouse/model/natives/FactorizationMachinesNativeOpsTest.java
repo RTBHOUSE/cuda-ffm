@@ -13,6 +13,19 @@ import org.junit.Test;
 public class FactorizationMachinesNativeOpsTest {
 
     @Test
+    public void test2x2AllZeros() {
+        int numFeatures = 2;
+        int numFields = 2;
+        int size = FACTOR_SIZE * numFeatures * numFields;
+
+        FloatBuffer weights = allocateDirectFloatBuffer(size);
+        weights.put(new float[size]);
+
+        IntBuffer feats = allocateDirectIntBufferOf(1, 0);
+        assertEquals(0.5, FactorizationMachineNativeOps.ffmPredict(weights, feats), 1e-07); // sigmoid(0)
+    }
+
+    @Test
     public void testSmallModel() {
         int numFeatures = 1;
         int numFields = 2;
