@@ -6,7 +6,7 @@
 
     <groupId>com.rtbhouse.model</groupId>
     <artifactId>ffm-native-ops</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -149,7 +149,7 @@
     </build>
 
     <name>${project.groupId}:${project.artifactId}</name>
-    <description>Small Java library that implements prediction using Field-aware Factorization Machine.</description>
+    <description>Small Java library that implements prediction using Field-aware Factorization Machines.</description>
     <url>https://github.com/RTBHOUSE/cuda-ffm</url>
 
     <licenses>
@@ -161,9 +161,9 @@
 
     <developers>
         <developer>
-            <name>Piotr Chromiec</name>
-            <email>tworec@rtbhouse.com</email>
-            <organization>RTB HOUSE</organization>
+            <name>Paweł Wiejacha</name>
+            <email>pawel.wiejacha@rtbhouse.com</email>
+            <organization>RTB House</organization>
             <organizationUrl>http://www.rtbhouse.com</organizationUrl>
         </developer>
     </developers>
