@@ -4,52 +4,44 @@
 #include "model.h"
 #include "cuda_buffer.h"
 
-struct FFMTrainerStatic
+struct FFMStatic
 {
     static void init();
     static void destroy();
+
+    template <typename T>
+    static HostBuffer<T> createHostBuffer(int size);
 };
+
+struct FFMPredictor;
 
 // Trains FFM model on CUDA using AdaGrad.
 struct FFMTrainer
 {
     const int numFields;
     const float samplingFactor; // 100 - for 1%  sampling, 10 for 10 % sampling
-    const int maxBatchSize;
+    const int maxTrainBatchSize;
 
     // state
     DeviceBuffer<float> dWeights;
     DeviceBuffer<float> dSquaredGradsSum;
 
-    // temporary buffers for learning
+    // temporary buffers for training
     DeviceBuffer<float> dLearnFieldSums;
-    DeviceBuffer<int> dXYLearnInputBuffer;
-
-    // temporary buffers for prediction
-    DeviceBuffer<int> dXYPredictInputBuffer;
-    DeviceBuffer<float> dPredictResultsBuffer;
-    DeviceBuffer<float> dPredictFieldSums;
+    DeviceBuffer<int> dXYTrainInputBuffer;
 
     FFMTrainer(Model const & model, float samplingFactor, int maxBatchSize, float l2Reg, float learningRate);
-    ~FFMTrainer();
-
-    template <typename T>
-    T * createHostBuffer(int size);
-
-    template <typename T>
-    void destroyHostBuffer(T * hBuffer);
 
     void copyWeightsToHost(float * hWeights);
     void copyGradsToHost(float * hGrads);
+    FFMPredictor createPredictor() const;
 
     // learn using given batch of samples
-    void learn(int const * hXYBatchBuffer, int batchSize);
-
-    // predict given batch of samples, store prediction results inside predictResults
-    void predict(int const * hXYBatchBuffer, int batchSize, float * predictResults);
+    void learn(HostBuffer<int> const & hXYBatchBuffer, int batchSize);
 
 private:
     int weightsSize;
 };
+
 
 #endif // CUDA_FFM_TRAINER_H

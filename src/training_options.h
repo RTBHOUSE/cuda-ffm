@@ -4,7 +4,7 @@
 #include <string>
 #include "utils.h"
 
-// Learning options
+// Training options
 struct Options
 {
     Options()
@@ -12,6 +12,7 @@ struct Options
               l2Reg(0.00002),
               samplingFactor(1.0),
               maxNumEpochs(15),
+              numStepsPerEpoch(20),
               maxBatchSize(200),
               seed(123)
     {
@@ -22,6 +23,7 @@ struct Options
 
     float samplingFactor; // 100 for 1% sampling
     int maxNumEpochs;
+    int numStepsPerEpoch;
     int maxBatchSize;
     int seed; // for random number generator, used during model initialization
 

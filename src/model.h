@@ -16,6 +16,18 @@ struct Model
     const float normalizationFactor;
     std::vector<float> weights;
 
+    Model(int const numFields, std::string const & inputModelFilePath)
+            : Model(numFields)
+    {
+        binaryDeserialize(inputModelFilePath);
+    }
+
+    Model(int const numFields, int seed)
+            : Model(numFields)
+    {
+        randomInit(seed);
+    }
+
     Model(int const numFields)
             : numFields(numFields),
               normalizationFactor(1.0 / static_cast<float>(numFields)),
@@ -23,9 +35,20 @@ struct Model
     {
     }
 
+    Model(Model && other)
+            : numFields(other.numFields),
+              normalizationFactor(other.normalizationFactor),
+              weights(std::move(other.weights))
+    {
+    }
+
     void randomInit(int seed);
-    void deserialize(std::string const & modelFilePath);
-    void serialize(std::string const & modelFilePath);
+
+    void exportModel(std::string const & modelFilePath) const;
+    void importModel(std::string const & modelFilePath);
+
+    void binarySerialize(std::string const & modelFilePath) const;
+    void binaryDeserialize(std::string const & modelFilePath);
 };
 
 #endif // CUDA_MODEL_H

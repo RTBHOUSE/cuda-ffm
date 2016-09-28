@@ -7,6 +7,7 @@
 
 #include <cstdio>
 #include <cmath>
+#include <cassert>
 #include <algorithm>
 
 #include <cuda_runtime.h>
@@ -73,11 +74,11 @@ struct __cuda_utils
     }
 
     template <typename T>
-    inline T * hostMalloc(int64_t numElems)
+    inline HostBuffer<T> hostMalloc(int64_t numElems)
     {
         T *result;
         __CHECK_ERR(cudaMallocHost((void ** )&result, numElems * sizeof(T)), file, line, func);
-        return result;
+        return HostBuffer<T>(result);
     }
 
     template <typename T>
@@ -113,6 +114,12 @@ struct __cuda_utils
     }
 
     template <typename T>
+    inline void memcpy(DeviceBuffer<T> & dst, HostBuffer<T> const & src, int64_t numElems)
+    {
+        __CHECK_ERR(cudaMemcpy(dst.get(), src.get(), numElems * sizeof(T), cudaMemcpyHostToDevice), file, line, func);
+    }
+
+    template <typename T>
     inline void memcpy(T * dst, DeviceBuffer<T> const & src, int64_t numElems)
     {
         __CHECK_ERR(cudaMemcpy(dst, src.get(), numElems * sizeof(T), cudaMemcpyDeviceToHost), file, line, func);
@@ -137,13 +144,5 @@ struct __cuda_utils
         __CHECK_ERR(cudaMemset(dst.get(), byte, numElems * sizeof(T)), file, line, func);
     }
 };
-
-template <typename T>
-void CudaDeleter<T>::operator()(T * ptr) const
-{
-    if (ptr) {
-        cuda_utils.free(ptr);
-    }
-}
 
 #endif // CUDA_UTILS_H

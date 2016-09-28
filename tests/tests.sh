@@ -46,42 +46,44 @@ diff <(sort tmp/shuffled.txt) <(sort tmp/testing.txt tmp/training.txt)
 
 # test learning
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 export LD_LIBRARY_PATH=/usr/local/cuda-7.5/lib64:$LD_LIBRARY_PATH
 
-./bin/learn --testingDatasetPath   tmp/testing.bin         \
-            --trainingDatasetPath  tmp/training.bin        \
-            --maxBatchSize         200                     \
-            --l2reg                0.000001                \
-            --maxNumEpochs         20                      \
-            --learningRate         0.07                    \
-            --samplingFactor       1                       \
-            --outputModelFilePath  tmp/model.out | tee tmp/learn.log
+stdbuf -o0 ./bin/trainer --testingDatasetPath   tmp/testing.bin         \
+              --trainingDatasetPath  tmp/training.bin                   \
+              --maxBatchSize         200                                \
+              --l2reg                0.000001                           \
+              --maxNumEpochs         50                                 \
+              --learningRate         0.07                               \
+              --samplingFactor       100                                \
+              --outputModelFilePath  tmp/model.out | stdbuf -i0 -o0 tee tmp/learn.log
 
 num_weights=`cat tmp/model.out | wc -l`
 test "$num_weights" = $((1000000*27*4+1)) || exit 1
 
 # test prediction
 
-learn_log_loss=`tail -n2 tmp/learn.log | head -n1| awk '{print $3}'`
-predict_log_loss=`./bin/predict tmp/model.out tmp/testing.bin 1.0 | tail -n1 | awk '{print $2}'`
+learn_log_loss=`tail -n4 tmp/learn.log | grep 'Best model log-loss' | awk '{print $4}'`
+best_predict_log_loss=`./bin/predict --textModelPath tmp/model.out --datasetPath tmp/testing.bin --samplingFactor 100.0 | tail -n1 | awk '{print $2}'`
+last_predict_log_loss=`./bin/predict --textModelPath tmp/model.out.last --datasetPath tmp/testing.bin --samplingFactor 100.0 | tail -n1 | awk '{print $2}'`
 
-echo $learn_log_loss $predict_log_loss
-echo "assert abs($learn_log_loss - $predict_log_loss) < 0.000001" | python
+echo $learn_log_loss $best_predict_log_loss $last_predict_log_loss
+echo "assert abs($learn_log_loss - $best_predict_log_loss) < 0.000001" | python
+echo "assert $last_predict_log_loss >= $best_predict_log_loss" | python
 
 # test learning (2)
 
-./bin/learn --testingDatasetPath   tmp/dataset1.bin        \
-            --trainingDatasetPath  tmp/dataset2.bin        \
-            --maxBatchSize         200                     \
-            --l2reg                0.000001                \
-            --maxNumEpochs         8                       \
-            --learningRate         0.07                    \
-            --samplingFactor       100                     \
-            --seed                 456                     \
-            --outputModelFilePath  tmp/model.out | tee tmp/learn.log
+./bin/trainer --testingDatasetPath   tmp/dataset1.bin        \
+              --trainingDatasetPath  tmp/dataset2.bin        \
+              --maxBatchSize         200                     \
+              --l2reg                0.000001                \
+              --maxNumEpochs         8                       \
+              --learningRate         0.07                    \
+              --samplingFactor       100                     \
+              --seed                 456                     \
+              --outputModelFilePath  tmp/model.out | tee tmp/learn.log
 
-learn_log_loss=`tail -n2 tmp/learn.log | head -n1| awk '{print $3}'`
+learn_log_loss=`tail -n4 tmp/learn.log | grep 'Best model log-loss' | awk '{print $4}'`
 echo "assert abs($learn_log_loss - 0.0337498) < 0.000001" | python
 
 echo SUCCESS

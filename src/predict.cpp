@@ -10,23 +10,52 @@
 #include <cstdlib>
 #include <string>
 
+struct Options {
+    Options() : samplingFactor(1.0) {}
+
+    std::string datasetPath;
+    std::string textModelPath;
+    std::string binModelPath;
+    float samplingFactor;
+};
+
+Options parseOptions(std::vector<std::string> const & args)
+{
+    Options options;
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--samplingFactor") {
+            options.samplingFactor = std::stof(args[++i]);
+        } else if (args[i] == "--datasetPath") {
+            options.datasetPath = args[++i];
+        } else if (args[i] == "--binModelPath") {
+            options.binModelPath = args[++i];
+        } else if (args[i] == "--textModelPath") {
+            options.textModelPath = args[++i];
+        } else {
+            throw std::invalid_argument("Invalid command line parameter: " + args[i]);
+        }
+    }
+
+    return options;
+}
+
 // Calculates log-loss of a dataset using ffm-native-ops C++ library (without GPU).
 //
 // Arguments:
-//   - argv[1] - model file path
-//   - argv[2] - dataset file path
-//   - argv[3] - sampling factor
+//  --datasetPath <path> (--binModelPath | --textModelPath) <path> [--samplingFactor <float>] 
 int main(int argc, const char ** argv)
 {
-    auto args = argvToArgs(argc, argv);
+    Options const & options = parseOptions(argvToArgs(argc, argv));
 
-    Dataset dataset(args[1]);
+    Dataset dataset(options.datasetPath);
     Model model(dataset.numFields);
-    model.deserialize(args[0]);
+    if (!options.binModelPath.empty()) {
+        model.binaryDeserialize(options.binModelPath);
+    } else {
+        model.importModel(options.textModelPath);
+    }
 
-    double samplingFactor(std::stod(args[2]));
-
-    LogLossCalculator logLossCalc(samplingFactor);
+    LogLossCalculator logLossCalc(options.samplingFactor);
 
     for (int64_t sampleIdx = 0; dataset.hasNext(); ++sampleIdx) {
         Dataset::Sample const & sample = dataset.next();

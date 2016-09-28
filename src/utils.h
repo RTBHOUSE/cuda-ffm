@@ -33,6 +33,8 @@ static float const inf = 1e12;
         ASSERT(x > -asserts::inf, fmt, args); \
     } while (false)
 
+#define LOG(fmt, ...) ::fprintf(stdout, fmt "\n", ## __VA_ARGS__)
+
 template <typename T>
 struct Option
 {

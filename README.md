@@ -95,29 +95,47 @@ make
 $ export CUDA_VISIBLE_DEVICES=<device-idx>
 $ export LD_LIBRARY_PATH=/usr/local/cuda-7.5/lib64:$LD_LIBRARY_PATH
 
-$ bin/learn --maxBatchSize       200                        \
-          --l2reg                0.00001                    \
-          --maxNumEpochs         10                         \
-          --learningRate         0.2                        \
-          --samplingFactor       1                          \
-          --outputModelFilePath  model.out                  \
-          --trainingDatasetPath  data/training_dataset.bin  \
-          --testingDatasetPath   data/testing_dataset.bin
+$ bin/trainer --maxBatchSize         200                        \
+              --l2reg                0.00001                    \
+              --maxNumEpochs         10                         \
+              --numStepsPerEpoch     20                         \
+              --learningRate         0.2                        \
+              --samplingFactor       1                          \
+              --outputModelFilePath  model.out                  \
+              --trainingDatasetPath  data/training_dataset.bin  \
+              --testingDatasetPath   data/testing_dataset.bin
+```
 
-Learning model
-Number of samples in training dataset: 711726176
-Number of samples in testing dataset : 7196252
+
+```bash
+Initializing model with random weights
+Training model
+CUDA FFM version: cuda-ffm-v0.2.4
+Number of samples in training dataset: 20000
+Number of samples in testing dataset : 10000
 Number of fields: 74, hash space size: 1000000
-L2 regularization: 0.00001, learning rate: 0.200000
+L2 regularization: 0.00000100, learning rate: 0.02000000
 Sampling factor: 1.000000, seed: 123
-Max number of epochs: 10
+Max number of epochs: 10, number of steps per epoch: 20
 
-Initial testing dataset log-loss: 9.061243
-
-epoch epoch_duration testing_log_loss
-    1      10638.747        0.0328052
-    2      10682.063        0.0327166
+Initial testing dataset log-loss: 3.288520
+Better model found. Step: 0.040000, logLoss: 0.039189
+Better model found. Step: 0.090000, logLoss: 0.037793
 ...
+Better model found. Step: 0.940000, logLoss: 0.035403
+Better model found. Step: 0.990000, logLoss: 0.035344
+> Epoch finished: epoch: 1; duration: 2.001 s
+...
+> Epoch finished: epoch: 2; duration: 1.883 s
+...
+> Epoch finished: epoch: 7; duration: 1.294 s
+Better model found. Step: 7.790000, logLoss: 0.033784
+Better model found. Step: 7.440000, logLoss: 0.033782
+Better model found. Step: 7.490000, logLoss: 0.033760
+> Epoch finished: epoch: 8; duration: 0.298 s
+Early stopping. Step: 8.290
+Best model log-loss:        0.0337498
+Last model log-loss:        0.0338218
 ```
 
 Options are:
@@ -125,15 +143,16 @@ Options are:
 |param| description|
 |----|---|
 | `--l2reg <float>`                | L2-regularization penalty|
-| `--maxNumEpochs <int>`           | number of epochs|
-| `--learningRate <float>`         | learning rate|
-| `--seed <int>`                   | random number generator seed|
-| `--maxBatchSize <int>`           | performance related, use 200. Does not change convergence|
-| `--samplingFactor <float>`       | how many negative (y = -1)_ data were subsampled. 1.0 for no subsampling|
-| `--inputModelFilePath <string>`  | path to the input model. Optional|
-| `--outputModelFilePath <string>` | path to the output model|
-| `--trainingDatasetPath <string>` | path to the training dataset|
-| `--testingDatasetPath <string>`  | path to the testing dataset|
+| `--maxNumEpochs <int>`           | Number of epochs|
+| `--learningRate <float>`         | Learning rate|
+| `--seed <int>`                   | Random number generator seed|
+| `--maxBatchSize <int>`           | Performance related, use 200. Does not change convergence|
+| `--numStepsPerEpoch <int>`        | Number of steps per epoch. At every step testing data set is evaluated and weights of the best model are updated. |
+| `--samplingFactor <float>`       | How many negative (y = -1)_ data were subsampled. 1.0 for no subsampling|
+| `--inputModelFilePath <string>`  | Path to the input model. Optional|
+| `--outputModelFilePath <string>` | Path to the output model|
+| `--trainingDatasetPath <string>` | Path to the training dataset|
+| `--testingDatasetPath <string>`  | Path to the testing dataset|
 
 ## Prediction using FFM
 
@@ -188,7 +207,7 @@ mvn clean compile exec:exec install
 ./bin/splitter shuffled.bin 0.10 testing.bin training.bin
 
 # learn model
-./bin/learn \
+./bin/trainer \
     --testingDatasetPath testing.bin   \
     --trainingDatasetPath training.bin \
     --outputModelFilePath model.out    \

@@ -19,7 +19,7 @@ struct DatasetWriter
     }
 
     DatasetWriter(std::string const & filePath)
-            : file(::fopen(filePath.c_str(), "w")),
+            : file(::fopen(filePath.c_str(), "wb")),
               headerWritten(false)
     {
     }
@@ -37,8 +37,8 @@ struct DatasetWriter
     {
         assert(headerWritten);
 
-        fputs(dataset::CANARY, file);
-        fclose(file);
+        ::fputs(dataset::CANARY, file);
+        ::fclose(file);
     }
 
 private:
@@ -47,8 +47,8 @@ private:
     {
         assert(!headerWritten);
 
-        fprintf(file, "ffm_features_v1 %d %d %d\n", FactorSize, numFields, HashSpaceSize);
-        fwrite(&dataset::EndiannessCheck, sizeof(int), 1, file);
+        ::fprintf(file, "ffm_features_v1 %d %d %d\n", FactorSize, numFields, HashSpaceSize);
+        ::fwrite(&dataset::EndiannessCheck, sizeof(int), 1, file);
         headerWritten = true;
     }
 

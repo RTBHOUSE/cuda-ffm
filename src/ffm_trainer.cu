@@ -1,5 +1,6 @@
 #include "constants.h"
 #include "ffm_trainer.h"
+#include "ffm_predictor.h"
 #include "cuda_utils.h"
 
 __constant__ float cLearningRate[1];
@@ -160,81 +161,18 @@ __global__ void ffmInnerSumKernel(const float *__restrict__ weights, const int *
     }
 }
 
-// Partially computes t (each thread block computes the inner sum for one field) - for prediction, batch mode
-__global__ void batchFfmInnerSumKernel(const float *__restrict__ weights, const int *__restrict__ input, float *__restrict__ fieldSums,
-                                       const int numFields)
-{
-    const int fieldIdx1 = threadIdx.x;
-    const int fieldIdx2 = blockIdx.x;
-
-    const int batchIdx = blockIdx.y;
-    const int batchInputOffset = (numFields + 1) * batchIdx;
-    const int rowSize = *cRowSize;
-
-    CUDA_ASSERT(fieldIdx1 < numFields);
-    CUDA_ASSERT(fieldIdx2 < numFields);
-
-    float sum = 0.0f;
-
-    if (fieldIdx2 > fieldIdx1) {
-        const int j1 = input[batchInputOffset + fieldIdx1];
-        const int j2 = input[batchInputOffset + fieldIdx2];
-
-        const int offset1 = j1 * rowSize + fieldIdx2 * FactorSize;
-        const int offset2 = j2 * rowSize + fieldIdx1 * FactorSize;
-
-        const float4 W1 = cub::ThreadLoad<cub::LOAD_DEFAULT>((float4 *) (weights + offset1));
-        const float4 W2 = cub::ThreadLoad<cub::LOAD_DEFAULT>((float4 *) (weights + offset2));
-
-        sum += W1.x * W2.x;
-        sum += W1.y * W2.y;
-        sum += W1.z * W2.z;
-        sum += W1.w * W2.w;
-    }
-
-    typedef cub::BlockReduce<float, MaxPredictBlockSize> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage tempStorage;
-    float aggregate = BlockReduce(tempStorage).Sum(sum);
-
-    if (threadIdx.x == 0) {
-        fieldSums[batchIdx * numFields + blockIdx.x] = aggregate * *cNormalizationFactor;
-    }
-}
-
-// Computes outer sum (t) and and applies logit function - for prediction
-__global__ void batchSigmoidKernel(const float *__restrict__ fieldSums, float *__restrict__ predictionResults, const int numFields)
-{
-    CUDA_ASSERT(threadIdx.x < numFields);
-
-    typedef cub::BlockReduce<float, MaxPredictBlockSize> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage tempStorage;
-    float t = BlockReduce(tempStorage).Sum(fieldSums[blockIdx.x * numFields + threadIdx.x]);
-
-    if (threadIdx.x == 0) {
-        const float p = 1.0f / (1.0f + expf(-t));
-        CUDA_ASSERT_FIN(p);
-        CUDA_ASSERT(p <= 1.0);
-        CUDA_ASSERT(p >= 0.0);
-        predictionResults[blockIdx.x] = p;
-    }
-}
-
 FFMTrainer::FFMTrainer(Model const & model, float samplingFactor, int maxBatchSize, float l2Reg, float learningRate)
         : numFields(model.numFields),
           samplingFactor(samplingFactor),
-          maxBatchSize(maxBatchSize),
+          maxTrainBatchSize(maxBatchSize),
           weightsSize(HashSpaceSize * model.numFields * FactorSize)
 {
     const int MaxNumFields = 1024;
     dWeights = cuda_utils.malloc<float>(weightsSize);
     dSquaredGradsSum = cuda_utils.malloc<float>(weightsSize);
 
-    dXYLearnInputBuffer = cuda_utils.malloc<int>(maxBatchSize * (numFields + 1));
+    dXYTrainInputBuffer = cuda_utils.malloc<int>(maxTrainBatchSize * (numFields + 1));
     dLearnFieldSums = cuda_utils.malloc<float>(MaxNumFields);
-
-    dXYPredictInputBuffer = cuda_utils.malloc<int>(maxBatchSize * (numFields + 1));
-    dPredictFieldSums = cuda_utils.malloc<float>(maxBatchSize * numFields);
-    dPredictResultsBuffer = cuda_utils.malloc<float>(maxBatchSize * (numFields + 1));
 
     CHECK_ERR(cudaGetLastError());
     CHECK_ERR(cudaDeviceSynchronize());
@@ -248,24 +186,19 @@ FFMTrainer::FFMTrainer(Model const & model, float samplingFactor, int maxBatchSi
     cuda_utils.memcpyToSymbol2(cScaledNormalizationFactor, model.normalizationFactor * samplingFactor, model.normalizationFactor);
 
     cuda_utils.memset(dLearnFieldSums, 0, MaxNumFields);
-    cuda_utils.memset(dPredictFieldSums, 0, maxBatchSize * numFields);
     fillKernel<<<HashSpaceSize, numFields * FactorSize>>>(dSquaredGradsSum.get(), 1.0);
 }
 
-FFMTrainer::~FFMTrainer()
+void FFMTrainer::learn(HostBuffer<int> const & hXYBatchBuffer, int batchSize)
 {
-}
+    assert(batchSize <= maxTrainBatchSize);
 
-void FFMTrainer::learn(int const *hXYBatchBuffer, int batchSize)
-{
-    assert(batchSize <= maxBatchSize);
-
-    cuda_utils.memcpy(dXYLearnInputBuffer, hXYBatchBuffer, batchSize * (numFields + 1));
+    cuda_utils.memcpy(dXYTrainInputBuffer, hXYBatchBuffer, batchSize * (numFields + 1));
     const int row_len = numFields + 1;
 
     for (int i = 0; i < batchSize; ++i) {
-        int y = hXYBatchBuffer[i * row_len + numFields];
-        const int *xy = dXYLearnInputBuffer.get() + i * row_len;
+        int y = hXYBatchBuffer.get()[i * row_len + numFields];
+        const int *xy = dXYTrainInputBuffer.get() + i * row_len;
         ffmInnerSumKernel<<<numFields, numFields>>>(dWeights.get(), xy, dLearnFieldSums.get());
         updateKernel<<<numFields, numFields * 4>>>(dLearnFieldSums.get(), dWeights.get(), dSquaredGradsSum.get(), xy, y, numFields);
 
@@ -274,29 +207,15 @@ void FFMTrainer::learn(int const *hXYBatchBuffer, int batchSize)
     CHECK_ERR(cudaDeviceSynchronize());
 }
 
-void FFMTrainer::predict(int const * hXYBatchBuffer, int batchSize, float * predictResults)
+FFMPredictor FFMTrainer::createPredictor() const
 {
-    assert(batchSize <= maxBatchSize);
-
-    cuda_utils.memcpy(dXYPredictInputBuffer, hXYBatchBuffer, batchSize * (numFields + 1));
-
-    batchFfmInnerSumKernel<<<dim3(numFields, batchSize, 1), numFields>>>(dWeights.get(), dXYPredictInputBuffer.get(),
-                                                                         dPredictFieldSums.get(), numFields);
-    batchSigmoidKernel<<<batchSize, numFields>>>(dPredictFieldSums.get(), dPredictResultsBuffer.get(), numFields);
-
-    cuda_utils.memcpy(predictResults, dPredictResultsBuffer, batchSize);
+    return FFMPredictor(&dWeights, maxTrainBatchSize * 5, numFields);
 }
 
 template <typename T>
-T *FFMTrainer::createHostBuffer(int size)
+HostBuffer<T> FFMStatic::createHostBuffer(int size)
 {
     return cuda_utils.hostMalloc<T>(size);
-}
-
-template <typename T>
-void FFMTrainer::destroyHostBuffer(T *hBuffer)
-{
-    cuda_utils.hostFree(hBuffer);
 }
 
 void FFMTrainer::copyWeightsToHost(float *hWeights)
@@ -309,28 +228,28 @@ void FFMTrainer::copyGradsToHost(float *hGrads)
     cuda_utils.memcpy(hGrads, dSquaredGradsSum, weightsSize);
 }
 
-void FFMTrainerStatic::init()
+void FFMStatic::init()
 {
     CHECK_ERR(cudaSetDeviceFlags(cudaDeviceMapHost));
     CHECK_ERR(cudaSetDeviceFlags(cudaDeviceScheduleSpin));
     //CHECK_ERR(cudaSetDeviceFlags(cudaDeviceScheduleYield));
     //CHECK_ERR(cudaSetDeviceFlags(cudaDeviceBlockingSync));
+
+#if __CUDA_ARCH__ > 500
     CHECK_ERR(cudaDeviceSetLimit(cudaLimitDevRuntimeSyncDepth, 0));
     CHECK_ERR(cudaDeviceSetLimit(cudaLimitDevRuntimePendingLaunchCount, 0));
+#endif // CUDA 5.0
     CHECK_ERR(cudaDeviceSetLimit(cudaLimitStackSize, 0));
     CHECK_ERR(cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 0));
     CHECK_ERR(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 }
 
-void FFMTrainerStatic::destroy()
+void FFMStatic::destroy()
 {
     CHECK_ERR(cudaDeviceReset());
 }
 
-template int *FFMTrainer::createHostBuffer<int>(int);
+template HostBuffer<int> FFMStatic::createHostBuffer<int>(int);
 
-template float *FFMTrainer::createHostBuffer<float>(int);
+template HostBuffer<float> FFMStatic::createHostBuffer<float>(int);
 
-template void FFMTrainer::destroyHostBuffer<int>(int *);
-
-template void FFMTrainer::destroyHostBuffer<float>(float *);

@@ -1,4 +1,4 @@
-#include "learn_options.h"
+#include "training_options.h"
 #include "cli.h"
 
 #include <vector>
@@ -11,7 +11,8 @@ std::string train_help()
                        "\n"
                        "   --l2reg <float>                : L2-regularization penalty\n"
                        "   --maxNumEpochs <int>           : number of epochs\n"
-                       "   --learningRate <float>         : learning rate\n"
+                       "   --numStepsPerEpoch <int>       : number of steps per epoch\n"
+                       "   --learningRate <float>         : training rate\n"
                        "   --seed <int>                   : random number generator seed\n"
                        "   --maxBatchSize <int>           : performance related, use 200\n"
                        "   --samplingFactor <float>       : how many negative data were subsampled\n"
@@ -35,25 +36,31 @@ Options parseOptions(std::vector<std::string> const & args)
     for (; i < argc; ++i) {
         if (i >= argc - 1) throw std::invalid_argument("Invalid number of command line arguments");
 
-        if (args[i].compare("--maxNumEpochs") == 0) {
+        if (args[i] == "--maxNumEpochs") {
             opt.maxNumEpochs = std::stoi(args[++i]);
-        } else if (args[i].compare("--learningRate") == 0) {
+            assert(opt.maxNumEpochs > 0);
+        } else if (args[i] == "--numStepsPerEpoch") {
+            opt.numStepsPerEpoch = std::stoi(args[++i]);
+            assert(opt.numStepsPerEpoch > 1);
+        } else if (args[i] == "--learningRate") {
             opt.learningRate = std::stof(args[++i]);
-        } else if (args[i].compare("--l2reg") == 0) {
+            assert(opt.learningRate > 0.0);
+        } else if (args[i] == "--l2reg") {
             opt.l2Reg = std::stof(args[++i]);
-        } else if (args[i].compare("--samplingFactor") == 0) {
+            assert(opt.l2Reg >= 0.0);
+        } else if (args[i] == "--samplingFactor") {
             opt.samplingFactor = std::stof(args[++i]);
-        } else if (args[i].compare("--maxBatchSize") == 0) {
+        } else if (args[i] == "--maxBatchSize") {
             opt.maxBatchSize = std::stoi(args[++i]);
-        } else if (args[i].compare("--seed") == 0) {
+        } else if (args[i] == "--seed") {
             opt.seed = std::stoi(args[++i]);
-        } else if (args[i].compare("--inputModelFilePath") == 0) {
+        } else if (args[i] == "--inputModelFilePath") {
             opt.inputModelFilePath = args[++i];
-        } else if (args[i].compare("--outputModelFilePath") == 0) {
+        } else if (args[i] == "--outputModelFilePath") {
             opt.outputModelFilePath = args[++i];
-        } else if (args[i].compare("--trainingDatasetPath") == 0) {
+        } else if (args[i] == "--trainingDatasetPath") {
             opt.trainingDatasetPath = args[++i];
-        } else if (args[i].compare("--testingDatasetPath") == 0) {
+        } else if (args[i] == "--testingDatasetPath") {
             opt.testingDatasetPath = args[++i];
         } else {
             throw std::invalid_argument("Invalid command line parameter: " + args[i]);
