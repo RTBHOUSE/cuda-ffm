@@ -110,7 +110,7 @@ $ bin/trainer --maxBatchSize         200                        \
 ```bash
 Initializing model with random weights
 Training model
-CUDA FFM version: cuda-ffm-v0.2.4
+CUDA FFM version: cuda-ffm-v0.2.9
 Number of samples in training dataset: 20000
 Number of samples in testing dataset : 10000
 Number of fields: 74, hash space size: 1000000

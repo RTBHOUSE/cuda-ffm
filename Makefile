@@ -1,6 +1,6 @@
 SUFFIXES += .d
 
-CUDA_FFM_VERSION := "cuda-ffm-v0.2.4"
+CUDA_FFM_VERSION := "cuda-ffm-v0.2.9"
 
 CUDA_SOURCES  := $(shell find src -name "*.cu")
 CXX_SOURCES   := $(shell find src -name "*.cpp")

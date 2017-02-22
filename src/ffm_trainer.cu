@@ -63,10 +63,10 @@ __global__ void updateKernel(const float *__restrict__ fieldSums, float *__restr
     // compute kappa
 
     if (threadIdx.x == 0) {
-        const float expNegYT = expf(-y * t);
-        const float kappa = -y * expNegYT / (1.0f + expNegYT);
+        const float expYT = expf(y * t);
+        const float kappa = -y / (1.0f + expYT);
         const float normalizationFactor = cScaledNormalizationFactor[y > 0];
-        CUDA_ASSERT_FIN(expNegYT);
+        CUDA_ASSERT_FIN(expYT);
         CUDA_ASSERT_FIN(kappa);
         _normalizedKappa = kappa * normalizationFactor;
     }

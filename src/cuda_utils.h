@@ -19,8 +19,7 @@
 #define CUDA_ASSERT_FIN(x) \
     do {\
         assert(!isnan(x));\
-        assert(x < 1e12f);\
-        assert(x > -1e12f);\
+        assert(isfinite(x));\
     } while (false)
 #define CUDA_ASSERT assert
 #else
